@@ -211,7 +211,7 @@ def min_max_normalizer(features, max_values, min_values):
     """
     n_examples, n_features = features.shape
     for column in range(n_features):
-        if max_values[column] - min_values[column] == 0:  # zero division check
+        if max_values[column] - min_values[column] == 0:            # zero division check
             continue
         features[:, column] = (features[:, column] - min_values[column]) / \
                               (max_values[column] - min_values[column])
@@ -222,12 +222,12 @@ def z_score_normalizer(features, mean_values, std_dev_values):
     normalizing features by z-score normalization
     :param features: features we want to normalize
     :param mean_values: mean values of each features extracted from train dataset
-    :param std_dev_values: standard deviation values of each featrue extracted from train dataset
+    :param std_dev_values: standard deviation values of each feature extracted from train dataset
     :return: None
     """
     n_examples, n_features = features.shape
     for column in range(n_features):
-        if std_dev_values[column] == 0:  # zero division check
+        if std_dev_values[column] == 0:                             # zero division check
             continue
         features[:, column] = (features[:, column] - mean_values[column]) / \
                               (std_dev_values[column])
@@ -279,7 +279,7 @@ def main(argv):
     """
     main function which extracting/normalizing data, builds linear models, training them on train dataset,
     and testing the models on test dataset, finally printing the outputs
-    :param argv: application arguments from the user
+    :param argv: applications' arguments from the user
     :return: None
     """
     # path to train and test files
@@ -307,9 +307,9 @@ def main(argv):
               'SVM': {'model': SVM(train_features, train_labels, text_features, eta=0.001, lamb=0.001), 'epochs': 15},
               'PA': {'model': PA(train_features, train_labels, text_features), 'epochs': 5}}
 
-    train_models(models)  # train models
+    train_models(models)                      # train models
     models_predictions = test_models(models)  # test models
-    print_predictions(models_predictions)  # print predictions
+    print_predictions(models_predictions)     # print predictions
 
 
 if __name__ == '__main__':
