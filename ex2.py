@@ -30,9 +30,10 @@ class Model:
             for x, y in zip(self.train_x, self.train_y):
                 scores = self.score(x)
                 y_hat = self.predict(scores)
+                hinge_loss = 0.
                 if y != y_hat:
                     hinge_loss = self.hinge_loss(scores, y, y_hat)
-                    self.update(x, y, y_hat, hinge_loss)
+                self.update(x, y, y_hat, hinge_loss)
 
     @staticmethod
     def hinge_loss(scores, y, y_hat):
@@ -77,7 +78,7 @@ class Model:
         :param x: example
         :param y: gold label
         :param y_hat: prediction label
-        :param loss: loss on error
+        :param loss: hinge loss
         :return: None
         """
         pass
@@ -85,6 +86,7 @@ class Model:
     def test(self):
         """
         testing the model on test dataset
+        @:param test_x: test dataset
         :return: list of predictions of the model on test dataset
         """
         predictions = []
@@ -94,11 +96,30 @@ class Model:
             predictions.append(y_hat)
         return predictions
 
+    def cross_validate(self, dev_x, dev_y):
+        """
+        cross validating of the model on dev dataset
+        :param dev_x: dev dataset
+        :param dev_y: dev dataset labels
+        :return: accuracy and total loss of the model on dev dataset
+        """
+        cum_hinge_loss = 0.
+        good = 0.
+        for x, y in zip(dev_x, dev_y):
+            scores = self.score(x)
+            y_hat = self.predict(scores)
+            if y == y_hat:
+                good += 1
+            else:
+                hinge_loss = self.hinge_loss(scores, y, y_hat)
+                cum_hinge_loss += hinge_loss
+        return good / len(dev_x), cum_hinge_loss / len(dev_x)
+
 
 class Perceptron(Model):
     """ Perceptron Model extending from Model """
-    def __init__(self, train_x, train_y, dev_x, eta):
-        super().__init__(train_x, train_y, dev_x)
+    def __init__(self, train_x, train_y, test_x, eta):
+        super().__init__(train_x, train_y, test_x)
         self.eta = eta
 
     def update(self, x, y, y_hat, loss):
@@ -107,7 +128,7 @@ class Perceptron(Model):
         :param x: example
         :param y: gold label
         :param y_hat: predicted label
-        :param loss: loss on error
+        :param loss: hinge loss
         :return: None
         """
         self.W[y, :] = self.W[y, :] + self.eta * x
@@ -116,8 +137,8 @@ class Perceptron(Model):
 
 class SVM(Model):
     """ SVM Model extending from Model """
-    def __init__(self, train_x, train_y, dev_x, eta, lamb):
-        super().__init__(train_x, train_y, dev_x)
+    def __init__(self, train_x, train_y, test_x, eta, lamb):
+        super().__init__(train_x, train_y, test_x)
         self.eta = eta
         self.lamb = lamb
 
@@ -127,19 +148,20 @@ class SVM(Model):
         :param x: example
         :param y: gold label
         :param y_hat: predicted label
-        :param loss: loss on error
+        :param loss: hinge loss
         :return: None
         """
         self.W[y, :] = (1 - self.eta * self.lamb) * self.W[y, :] + self.eta * x
         self.W[y_hat, :] = (1 - self.eta * self.lamb) * self.W[y_hat, :] - self.eta * x
-        self.W[LABELS_SIZE - y - y_hat, :] = \
-            (1 - self.eta * self.lamb) * self.W[LABELS_SIZE - y - y_hat, :]
+        for i in range(LABELS_SIZE):    # update all vectors that are not y and y_hat
+            if i != y and i != y_hat:
+                self.W[i, :] = (1 - self.eta * self.lamb) * self.W[i, :]
 
 
 class PA(Model):
     """ PA Model extending from Model """
-    def __init__(self, train_x, train_y, dev_x):
-        super().__init__(train_x, train_y, dev_x)
+    def __init__(self, train_x, train_y, test_x):
+        super().__init__(train_x, train_y, test_x)
 
     def update(self, x, y, y_hat, loss):
         """
@@ -147,10 +169,13 @@ class PA(Model):
         :param x: example
         :param y: gold label
         :param y_hat: predicted label
-        :param loss: loss on error
+        :param loss: hinge loss
         :return: None
         """
-        tau = loss / (2 * np.square(np.linalg.norm(x)))
+        if np.square(np.linalg.norm(x)) == 0:   # zero division check
+            tau = 0.
+        else:
+            tau = loss / (2 * np.square(np.linalg.norm(x)))
         self.W[y, :] = self.W[y, :] + tau * x
         self.W[y_hat, :] = self.W[y_hat, :] - tau * x
 
@@ -164,9 +189,9 @@ def extract_features(path_to_features):
     features = []
     with open(path_to_features) as f:
         for line in f.readlines():
-            feature_values = line.strip().split(',')
-            feature_values[0] = str(sex2int_enc[feature_values[0]])  # categorical  to numeric encoding
+            feature_values = line.strip().split(',')[1:]                        # skip first feature (feature selection)
             # feature_values = sex2one_hot_enc[feature_values[0]] + feature_values[1:]  # to one hot encoding
+            # feature_values[0] = str(sex2int_enc[feature_values[0]])           # categorical  to numeric encoding
             features.append(np.array(feature_values, dtype=np.float))
 
     return np.array(features)
@@ -209,12 +234,14 @@ def min_max_normalizer(features, max_values, min_values):
     :param min_values: amx values of each features extracted from train dataset
     :return: None
     """
-    n_examples, n_features = features.shape
+    norm_features = np.copy(features)
+    n_examples, n_features = norm_features.shape
     for column in range(n_features):
         if max_values[column] - min_values[column] == 0:            # zero division check
             continue
-        features[:, column] = (features[:, column] - min_values[column]) / \
-                              (max_values[column] - min_values[column])
+        norm_features[:, column] = (norm_features[:, column] - min_values[column]) / \
+                                   (max_values[column] - min_values[column])
+    return norm_features
 
 
 def z_score_normalizer(features, mean_values, std_dev_values):
@@ -225,12 +252,14 @@ def z_score_normalizer(features, mean_values, std_dev_values):
     :param std_dev_values: standard deviation values of each feature extracted from train dataset
     :return: None
     """
-    n_examples, n_features = features.shape
+    norm_features = np.copy(features)
+    n_examples, n_features = norm_features.shape
     for column in range(n_features):
         if std_dev_values[column] == 0:                             # zero division check
             continue
-        features[:, column] = (features[:, column] - mean_values[column]) / \
-                              (std_dev_values[column])
+        norm_features[:, column] = (norm_features[:, column] - mean_values[column]) / \
+                                   (std_dev_values[column])
+    return norm_features
 
 
 def train_models(models):
@@ -266,8 +295,8 @@ def print_predictions(models_predictions):
     :return: None
     """
     perceptron_predictions = models_predictions['Perceptron']
-    svm_predictions = models_predictions['Perceptron']
-    pa_predictions = models_predictions['Perceptron']
+    svm_predictions = models_predictions['SVM']
+    pa_predictions = models_predictions['PA']
 
     test_length = len(perceptron_predictions)
     for i in range(test_length):
@@ -292,20 +321,21 @@ def main(argv):
     train_labels = extract_labels(train_y_path)
 
     # extracting test data
-    text_features = extract_features(test_x_path)
+    test_features = extract_features(test_x_path)
 
     # preprocessing train/test data
-    max_values, min_values = extract_min_max_values(train_features)
-    min_max_normalizer(train_features, max_values, min_values)
-    min_max_normalizer(text_features, max_values, min_values)
+    # max_values, min_values = extract_min_max_values(train_features)
+    # min_max_train_features = min_max_normalizer(train_features, max_values, min_values)
+    # min_max_test_features = min_max_normalizer(test_features, max_values, min_values)
     # mean_values, dev_values = extract_mean_dev_values(train_features)
-    # z_score_normalizer(train_features, mean_values, dev_values)
-    # z_score_normalizer(text_features, mean_values, dev_values)
+    # z_score_train_features = z_score_normalizer(train_features, mean_values, dev_values)
+    # z_score_dev_features = z_score_normalizer(test_features, mean_values, dev_values)
 
     # creating linear models
-    models = {'Perceptron': {'model': Perceptron(train_features, train_labels, text_features, eta=0.001), 'epochs': 15},
-              'SVM': {'model': SVM(train_features, train_labels, text_features, eta=0.001, lamb=0.001), 'epochs': 15},
-              'PA': {'model': PA(train_features, train_labels, text_features), 'epochs': 5}}
+    models = {
+        'Perceptron': {'model': Perceptron(train_features, train_labels, test_features, eta=0.001), 'epochs': 30},
+        'SVM': {'model': SVM(train_features, train_labels, test_features, eta=0.001, lamb=0.001), 'epochs': 15},
+        'PA': {'model': PA(train_features, train_labels, test_features), 'epochs': 5}}
 
     train_models(models)                      # train models
     models_predictions = test_models(models)  # test models
