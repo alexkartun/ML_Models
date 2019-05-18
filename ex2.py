@@ -333,7 +333,7 @@ def main(argv):
 
     # creating linear models
     models = {
-        'Perceptron': {'model': Perceptron(train_features, train_labels, test_features, eta=0.001), 'epochs': 30},
+        'Perceptron': {'model': Perceptron(train_features, train_labels, test_features, eta=0.001), 'epochs': 15},
         'SVM': {'model': SVM(train_features, train_labels, test_features, eta=0.001, lamb=0.001), 'epochs': 15},
         'PA': {'model': PA(train_features, train_labels, test_features), 'epochs': 5}}
 
